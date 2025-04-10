@@ -22,7 +22,9 @@ const Chatbot = () => {
   const [selectedSubCategory, setSelectedSubCategory] = useState("");
   const [selectedSecondSubCategory, setSelectedSecondSubCategory] =
     useState("");
+  const [location, setLocation] = useState("");
   const [clickedOptions, setClickedOptions] = useState(new Set());
+  const [category, setCategory] = useState("");
 
   const productData = {
     Products: {
@@ -35,11 +37,10 @@ const Chatbot = () => {
         "Water Closet": ["Sliding Door", "Pivot Door", "Walk-in"],
         Taps: ["Taps"],
       },
+      "Access Safety & Security": [],
+      "Doors & Entrances": [],
     },
-    Professionals: {
-      "Interior Designer": ["Residential", "Commercial", "Office"],
-      Architect: ["Home", "Building", "Landscape"],
-    },
+    Professionals: ["Interior Designer", "Architect"],
     Ideas: {
       Residential: ["Living Room", "Bedroom", "Kitchen"],
       Commercial: ["Office", "Restaurant", "Retail"],
@@ -69,10 +70,19 @@ const Chatbot = () => {
         setSelectedCategory(option);
         const options = Object.keys(productData);
         handleDisableOptions(options);
-        const subOptions = Object.keys(productData[option]);
+        const subOptions =
+          option === "Professionals"
+            ? productData[option]
+            : Object.keys(productData[option]);
+        // console.log(subOptions, "sub");
+
         botMessage.text = `Great! I can help you with ${option}.\nWhat category are you looking for?`;
         botMessage.options = subOptions;
-        setCurrentStep("mainCategory");
+        if (option === "Professionals") {
+          setCurrentStep("subCategory");
+        } else {
+          setCurrentStep("mainCategory");
+        }
         break;
 
       case "mainCategory": {
@@ -98,18 +108,27 @@ const Chatbot = () => {
 
       case "subCategory": {
         {
-          const subCategoryOptions = ["Professionals", "Ideas"].includes(
-            selectedCategory
-          )
-            ? productData[selectedCategory][selectedSubCategory]
-            : Object.keys(productData[selectedCategory][selectedSubCategory]);
+          let subCategoryOptions;
+
+          if (selectedCategory === "Professionals") {
+            subCategoryOptions = productData[selectedCategory];
+          } else if (selectedCategory === "Ideas") {
+            subCategoryOptions =
+              productData[selectedCategory][selectedSubCategory];
+          } else {
+            subCategoryOptions = Object.keys(
+              productData[selectedCategory][selectedSubCategory]
+            );
+          }
 
           handleDisableOptions(subCategoryOptions);
         }
+
         if (["Professionals", "Ideas"].includes(selectedCategory)) {
+          setCategory(option);
           botMessage.text =
-            "Excellent choice! Could you describe your requirements?";
-          setCurrentStep("description");
+            "Excellent choice! Please share your city for the relevant idea near your city.";
+          setCurrentStep("location");
         } else {
           setSelectedSecondSubCategory(option);
           const products =
@@ -127,9 +146,8 @@ const Chatbot = () => {
             selectedSecondSubCategory
           ];
 
-        console.log(options, "op");
         handleDisableOptions(options);
-
+        setCategory(option);
         botMessage.text =
           "Excellent choice! Could you describe your requirements?\n(e.g., size, material, style, budget)";
         setCurrentStep("description");
@@ -146,31 +164,50 @@ const Chatbot = () => {
     if (botMessage.text) setMessages((prev) => [...prev, botMessage]);
   };
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
+  const handleSendMessage = () => {
+    const trimmedInput = inputValue.trim();
+    if (!trimmedInput) return;
 
-    const userMessage = { text: inputValue, sender: "user" };
+    const userMessage = { text: trimmedInput, sender: "user" };
     setMessages((prev) => [...prev, userMessage]);
 
-    if (currentStep === "description") {
-      if (selectedCategory === "Products") {
-        await productRecommendations(inputValue);
-      } else if (selectedCategory === "Ideas") {
-        await ideaRecommendations(inputValue);
+    if (currentStep === "location") {
+      setInputValue("");
+      const message = {
+        text: "Excellent choice! Could you describe your requirements?",
+        sender: "bot",
+      };
+      setMessages((prev) => [...prev, message]);
+      setCurrentStep("description");
+    } else if (currentStep === "description") {
+      console.log(trimmedInput, selectedCategory, category, "blah");
+      if (selectedCategory === "Products" || selectedCategory === "Ideas") {
+        setInputValue("");
+        getRecommendations(trimmedInput, selectedCategory, category);
       }
       setCurrentStep("welcome");
       setSelectedCategory("");
       setSelectedSubCategory("");
+      setLocation("");
+      setCategory("");
     }
-
-    setInputValue("");
   };
 
-  const productRecommendations = async (description) => {
+  // location variable is exist and update  above
+  const getRecommendations = async (query, productType, category) => {
     try {
-      const res = await fetch("/api/search/products", {
+      let updatedQuery = query;
+      if (productType === "Ideas" && location) {
+        updatedQuery = `${query} in ${location}`;
+      }
+      const res = await fetch("/api/search", {
         method: "POST",
-        body: JSON.stringify({ query: description, topK: 5 }),
+        body: JSON.stringify({
+          query: updatedQuery,
+          topK: 3,
+          productType,
+          category,
+        }),
       });
       const data = await res.json();
       if (!data || data.length === 0) {
@@ -178,43 +215,70 @@ const Chatbot = () => {
         setMessages((prev) => [...prev, message]);
         return;
       }
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "user",
-          type: "products",
-          products: data,
-        },
-      ]);
+      const message = {
+        sender: "bot",
+        type: productType?.toLowerCase(),
+      };
+      if (productType === "Products") {
+        message.products = data;
+      } else if (productType === "Ideas") {
+        message.ideas = data;
+      }
+      setMessages((prev) => [...prev, message]);
     } catch (error) {
       console.error(error);
     }
   };
 
-  const ideaRecommendations = async (description) => {
-    try {
-      const res = await fetch("/api/search/ideas", {
-        method: "POST",
-        body: JSON.stringify({ query: description, topK: 5 }),
-      });
-      const data = await res.json();
-      if (!data || data.length === 0) {
-        const message = { text: "No ideas found", sender: "bot" };
-        setMessages((prev) => [...prev, message]);
-        return;
-      }
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "user",
-          type: "ideas",
-          ideas: data,
-        },
-      ]);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  // const productRecommendations = async (description) => {
+  //   try {
+  //     const res = await fetch("/api/search/products", {
+  //       method: "POST",
+  //       body: JSON.stringify({ query: description, topK: 5 }),
+  //     });
+  //     const data = await res.json();
+  //     if (!data || data.length === 0) {
+  //       const message = { text: "No products found", sender: "bot" };
+  //       setMessages((prev) => [...prev, message]);
+  //       return;
+  //     }
+  //     setMessages((prev) => [
+  //       ...prev,
+  //       {
+  //         sender: "user",
+  //         type: "products",
+  //         products: data,
+  //       },
+  //     ]);
+  //   } catch (error) {
+  //     console.error(error);
+  //   }
+  // };
+
+  // const ideaRecommendations = async (description) => {
+  //   try {
+  //     const res = await fetch("/api/search/ideas", {
+  //       method: "POST",
+  //       body: JSON.stringify({ query: description, topK: 5 }),
+  //     });
+  //     const data = await res.json();
+  //     if (!data || data.length === 0) {
+  //       const message = { text: "No ideas found", sender: "bot" };
+  //       setMessages((prev) => [...prev, message]);
+  //       return;
+  //     }
+  //     setMessages((prev) => [
+  //       ...prev,
+  //       {
+  //         sender: "user",
+  //         type: "ideas",
+  //         ideas: data,
+  //       },
+  //     ]);
+  //   } catch (error) {
+  //     console.error(error);
+  //   }
+  // };
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter") {
@@ -235,6 +299,8 @@ const Chatbot = () => {
     setSelectedCategory("");
     setSelectedSubCategory("");
     setInputValue("");
+    setSelectedSecondSubCategory("");
+    setLocation("");
   };
 
   const messagesEndRef = useRef(null);

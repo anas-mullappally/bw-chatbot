@@ -2,7 +2,7 @@ import Image from "next/image";
 
 export default function ChatHeader({ toggleChat, handleReset }) {
   return (
-    <div className="bg-[#009ee5e6] text-black p-4 flex justify-between items-center">
+    <div className="bg-[#009ce5b0] text-black p-4 flex justify-between items-center">
       <div className="flex items-center gap-4 cursor-default">
         <Image src={"/BW-bot.png"} alt="bot-image" width={40} height={40} />
         <h3 className="text-sm font-bold m-0">BW Bot</h3>

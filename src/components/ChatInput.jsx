@@ -1,3 +1,5 @@
+import { Send } from "lucide-react";
+
 export default function ChatInput({
   inputValue,
   setInputValue,
@@ -18,7 +20,7 @@ export default function ChatInput({
         onClick={handleSendMessage}
         className="bg-[#009ee5e6] text-white border-none px-3 py-2 rounded cursor-pointer hover:bg-blue-700"
       >
-        Send
+        <Send />
       </button>
     </div>
   );
